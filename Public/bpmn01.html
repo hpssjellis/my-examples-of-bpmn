@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BPMN Process Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .controls {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .control-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .canvas-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #bpmnCanvas {
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            background: #fafafa;
+            display: block;
+            margin: 0 auto;
+            cursor: crosshair;
+        }
+
+        .legend {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .legend h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+            font-size: 1.3em;
+        }
+
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            border-radius: 8px;
+            background: #f8f9ff;
+        }
+
+        .legend-symbol {
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            min-width: 200px;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+
+        @media (max-width: 768px) {
+            .control-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            #bpmnCanvas {
+                width: 100%;
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 BPMN Process Visualizer</h1>
+            <p>Interactive Business Process Model and Notation Diagram</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <button onclick="loadSampleProcess()">📋 Load Sample Process</button>
+                <button onclick="clearCanvas()">🗑️ Clear Canvas</button>
+                <button onclick="exportProcess()">💾 Export Process</button>
+                <button onclick="toggleGrid()">📐 Toggle Grid</button>
+                <button onclick="zoomIn()">🔍+ Zoom In</button>
+                <button onclick="zoomOut()">🔍- Zoom Out</button>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <canvas id="bpmnCanvas" width="1200" height="600"></canvas>
+            <div id="infoPanel" class="info-panel">
+                <h4>Element Info</h4>
+                <div id="elementDetails"></div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <h3>BPMN Elements Legend</h3>
+            <div class="legend-grid">
+                <div class="legend-item">
+                    <div class="legend-symbol" style="background: #4CAF50; border-radius: 50%;"></div>
+                    <span><strong>Start Event:</strong> Process beginning</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-symbol" style="background: #f44336; border-radius: 50%; border: 3px solid #333;"></div>
+                    <span><strong>End Event:</strong> Process completion</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-symbol" style="background: #2196F3; border-radius: 10px;"></div>
+                    <span><strong>Task:</strong> Work to be performed</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-symbol" style="background: #FF9800; border-radius: 50%; border: 2px solid #333;"></div>
+                    <span><strong>Gateway:</strong> Decision point</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-symbol" style="background: #9C27B0; border-radius: 10px;"></div>
+                    <span><strong>Subprocess:</strong> Detailed process</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-symbol" style="background: linear-gradient(45deg, #333 25%, transparent 25%), linear-gradient(-45deg, #333 25%, transparent 25%); background-size: 4px 4px;"></div>
+                    <span><strong>Sequence Flow:</strong> Process direction</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class BPMNVisualizer {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.elements = [];
+                this.connections = [];
+                this.selectedElement = null;
+                this.showGrid = true;
+                this.zoomLevel = 1;
+                this.offsetX = 0;
+                this.offsetY = 0;
+                
+                this.setupEventListeners();
+                this.draw();
+            }
+
+            setupEventListeners() {
+                this.canvas.addEventListener('click', (e) => this.handleClick(e));
+                this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+            }
+
+            handleClick(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / this.zoomLevel;
+                const y = (e.clientY - rect.top) / this.zoomLevel;
+                
+                const clickedElement = this.findElementAt(x, y);
+                if (clickedElement) {
+                    this.showElementInfo(clickedElement);
+                }
+            }
+
+            handleMouseMove(e) {
+                const rect = this.canvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / this.zoomLevel;
+                const y = (e.clientY - rect.top) / this.zoomLevel;
+                
+                const hoveredElement = this.findElementAt(x, y);
+                this.canvas.style.cursor = hoveredElement ? 'pointer' : 'crosshair';
+            }
+
+            findElementAt(x, y) {
+                return this.elements.find(element => {
+                    return x >= element.x && x <= element.x + element.width &&
+                           y >= element.y && y <= element.y + element.height;
+                });
+            }
+
+            showElementInfo(element) {
+                const panel = document.getElementById('infoPanel');
+                const details = document.getElementById('elementDetails');
+                
+                details.innerHTML = `
+                    <p><strong>Type:</strong> ${element.type}</p>
+                    <p><strong>Name:</strong> ${element.name}</p>
+                    <p><strong>Description:</strong> ${element.description || 'No description'}</p>
+                `;
+                
+                panel.style.display = 'block';
+                setTimeout(() => panel.style.display = 'none', 3000);
+            }
+
+            drawGrid() {
+                if (!this.showGrid) return;
+                
+                this.ctx.strokeStyle = '#e0e0e0';
+                this.ctx.lineWidth = 1;
+                
+                const gridSize = 20 * this.zoomLevel;
+                
+                for (let x = 0; x < this.canvas.width; x += gridSize) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, 0);
+                    this.ctx.lineTo(x, this.canvas.height);
+                    this.ctx.stroke();
+                }
+                
+                for (let y = 0; y < this.canvas.height; y += gridSize) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, y);
+                    this.ctx.lineTo(this.canvas.width, y);
+                    this.ctx.stroke();
+                }
+            }
+
+            drawStartEvent(element) {
+                this.ctx.fillStyle = '#4CAF50';
+                this.ctx.beginPath();
+                this.ctx.arc(element.x + element.width/2, element.y + element.height/2, element.width/2, 0, 2 * Math.PI);
+                this.ctx.fill();
+                
+                this.ctx.fillStyle = 'white';
+                this.ctx.font = '12px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('START', element.x + element.width/2, element.y + element.height + 20);
+            }
+
+            drawEndEvent(element) {
+                this.ctx.fillStyle = '#f44336';
+                this.ctx.beginPath();
+                this.ctx.arc(element.x + element.width/2, element.y + element.height/2, element.width/2, 0, 2 * Math.PI);
+                this.ctx.fill();
+                
+                this.ctx.strokeStyle = '#333';
+                this.ctx.lineWidth = 3;
+                this.ctx.stroke();
+                
+                this.ctx.fillStyle = 'white';
+                this.ctx.font = '12px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('END', element.x + element.width/2, element.y + element.height + 20);
+            }
+
+            drawTask(element) {
+                this.ctx.fillStyle = '#2196F3';
+                this.ctx.fillRect(element.x, element.y, element.width, element.height);
+                
+                this.ctx.strokeStyle = '#1976D2';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(element.x, element.y, element.width, element.height);
+                
+                this.ctx.fillStyle = 'white';
+                this.ctx.font = 'bold 14px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText(element.name, element.x + element.width/2, element.y + element.height/2 + 5);
+            }
+
+            drawGateway(element) {
+                const centerX = element.x + element.width/2;
+                const centerY = element.y + element.height/2;
+                
+                this.ctx.fillStyle = '#FF9800';
+                this.ctx.beginPath();
+                this.ctx.moveTo(centerX, element.y);
+                this.ctx.lineTo(element.x + element.width, centerY);
+                this.ctx.lineTo(centerX, element.y + element.height);
+                this.ctx.lineTo(element.x, centerY);
+                this.ctx.closePath();
+                this.ctx.fill();
+                
+                this.ctx.strokeStyle = '#F57C00';
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+                
+                // Draw X symbol for exclusive gateway
+                this.ctx.strokeStyle = '#333';
+                this.ctx.lineWidth = 3;
+                this.ctx.beginPath();
+                this.ctx.moveTo(centerX - 10, centerY - 10);
+                this.ctx.lineTo(centerX + 10, centerY + 10);
+                this.ctx.moveTo(centerX + 10, centerY - 10);
+                this.ctx.lineTo(centerX - 10, centerY + 10);
+                this.ctx.stroke();
+            }
+
+            drawConnection(connection) {
+                this.ctx.strokeStyle = '#333';
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.moveTo(connection.fromX, connection.fromY);
+                this.ctx.lineTo(connection.toX, connection.toY);
+                this.ctx.stroke();
+                
+                // Draw arrowhead
+                const angle = Math.atan2(connection.toY - connection.fromY, connection.toX - connection.fromX);
+                const arrowLength = 10;
+                
+                this.ctx.beginPath();
+                this.ctx.moveTo(connection.toX, connection.toY);
+                this.ctx.lineTo(
+                    connection.toX - arrowLength * Math.cos(angle - Math.PI / 6),
+                    connection.toY - arrowLength * Math.sin(angle - Math.PI / 6)
+                );
+                this.ctx.moveTo(connection.toX, connection.toY);
+                this.ctx.lineTo(
+                    connection.toX - arrowLength * Math.cos(angle + Math.PI / 6),
+                    connection.toY - arrowLength * Math.sin(angle + Math.PI / 6)
+                );
+                this.ctx.stroke();
+            }
+
+            draw() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.save();
+                this.ctx.scale(this.zoomLevel, this.zoomLevel);
+                this.ctx.translate(this.offsetX, this.offsetY);
+                
+                this.drawGrid();
+                
+                // Draw connections first (behind elements)
+                this.connections.forEach(connection => this.drawConnection(connection));
+                
+                // Draw elements
+                this.elements.forEach(element => {
+                    switch(element.type) {
+                        case 'startEvent':
+                            this.drawStartEvent(element);
+                            break;
+                        case 'endEvent':
+                            this.drawEndEvent(element);
+                            break;
+                        case 'task':
+                            this.drawTask(element);
+                            break;
+                        case 'gateway':
+                            this.drawGateway(element);
+                            break;
+                    }
+                });
+                
+                this.ctx.restore();
+            }
+
+            addElement(type, x, y, width, height, name, description = '') {
+                this.elements.push({
+                    type, x, y, width, height, name, description
+                });
+                this.draw();
+            }
+
+            addConnection(fromX, fromY, toX, toY) {
+                this.connections.push({ fromX, fromY, toX, toY });
+                this.draw();
+            }
+
+            clear() {
+                this.elements = [];
+                this.connections = [];
+                this.draw();
+            }
+
+            toggleGrid() {
+                this.showGrid = !this.showGrid;
+                this.draw();
+            }
+
+            zoom(factor) {
+                this.zoomLevel = Math.max(0.5, Math.min(2, this.zoomLevel * factor));
+                this.draw();
+            }
+
+            loadSampleProcess() {
+                this.clear();
+                
+                // Add sample BPMN elements
+                this.addElement('startEvent', 50, 200, 40, 40, 'Start', 'Process initiation');
+                this.addElement('task', 150, 175, 120, 60, 'Review Request', 'Initial request review');
+                this.addElement('gateway', 320, 190, 40, 40, 'Decision', 'Approval decision point');
+                this.addElement('task', 420, 120, 120, 60, 'Approve', 'Request approval');
+                this.addElement('task', 420, 230, 120, 60, 'Reject', 'Request rejection');
+                this.addElement('task', 600, 175, 120, 60, 'Process', 'Final processing');
+                this.addElement('endEvent', 780, 190, 40, 40, 'End', 'Process completion');
+                
+                // Add connections
+                this.addConnection(90, 220, 150, 205);
+                this.addConnection(270, 205, 320, 210);
+                this.addConnection(360, 200, 420, 150);
+                this.addConnection(360, 220, 420, 260);
+                this.addConnection(540, 150, 600, 195);
+                this.addConnection(540, 260, 600, 215);
+                this.addConnection(720, 205, 780, 210);
+            }
+        }
+
+        // Initialize the visualizer
+        const bpmnViz = new BPMNVisualizer('bpmnCanvas');
+
+        // Global functions for controls
+        function loadSampleProcess() {
+            bpmnViz.loadSampleProcess();
+        }
+
+        function clearCanvas() {
+            bpmnViz.clear();
+        }
+
+        function exportProcess() {
+            const dataURL = bpmnViz.canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'bpmn-process.png';
+            link.href = dataURL;
+            link.click();
+        }
+
+        function toggleGrid() {
+            bpmnViz.toggleGrid();
+        }
+
+        function zoomIn() {
+            bpmnViz.zoom(1.2);
+        }
+
+        function zoomOut() {
+            bpmnViz.zoom(0.8);
+        }
+
+        // Load sample process on start
+        setTimeout(() => loadSampleProcess(), 500);
+    </script>
+</body>
+</html>
