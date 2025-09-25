@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Simple BPMN Editor</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #myHeader {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-size: 24px;
+        }
+
+        #myContainer {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        #myCanvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        #myControls {
+            background-color: #333;
+            padding: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .myButton {
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        
+        .myButton:hover {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="myHeader">My Simple BPMN Editor</div>
+    <div id="myContainer">
+        <div id="myCanvas"></div>
+    </div>
+    <div id="myControls">
+        <button class="myButton" style="background-color: #008CBA;" onclick="myNewDiagram()">New</button>
+        <button class="myButton" style="background-color: #4CAF50;" onclick="mySaveDiagram()">Save XML</button>
+        <button class="myButton" style="background-color: #4CAF50;" onclick="myExportSvg()">Export SVG</button>
+        <button class="myButton" style="background-color: #f44336;" onclick="document.getElementById('myFileInput').click()">Load XML</button>
+        <button class="myButton" style="background-color: #555;" onclick="myUndo()">Undo</button>
+        <button class="myButton" style="background-color: #555;" onclick="myRedo()">Redo</button>
+        <input type="text" id="myNameInput" placeholder="Enter new name" style="padding: 10px; border-radius: 5px; border: none;" />
+        <button class="myButton" style="background-color: #2196F3;" onclick="myChangeName(document.getElementById('myNameInput').value)">Change Name</button>
+    </div>
+
+    <input type="file" id="myFileInput" style="display: none;" onchange="myLoadFile(event)">
+
+    <script src="https://unpkg.com/bpmn-js@18.0.0/dist/bpmn-modeler.development.js"></script>
+    <script>
+        // My preferred variable names
+        const myCanvas = document.getElementById('myCanvas');
+        const myModeler = new BpmnJS({ container: myCanvas });
+        const myCommandStack = myModeler.get('commandStack');
+        const myModeling = myModeler.get('modeling');
+
+        // My initial blank BPMN XML diagram
+        const myInitialDiagram = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1" isExecutable="false" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1" />
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+
+        // My function to display a diagram on the canvas
+        async function myDisplayDiagram(myDiagramXML) {
+            try {
+                await myModeler.importXML(myDiagramXML);
+                console.log('Diagram loaded successfully.');
+            } catch (err) {
+                console.error('Error loading diagram:', err);
+                alert('Error loading diagram. Make sure it is a valid BPMN XML file.');
+            }
+        }
+
+        // My function to save the diagram as a BPMN XML file
+        window.mySaveDiagram = async () => {
+            try {
+                const { xml } = await myModeler.saveXML({ format: true });
+                const myBlob = new Blob([xml], { type: 'text/xml' });
+                const myUrl = URL.createObjectURL(myBlob);
+                
+                // Create a temporary link and trigger a download
+                const myLink = document.createElement('a');
+                myLink.href = myUrl;
+                myLink.download = 'diagram.bpmn';
+                myLink.click();
+
+                alert('Diagram saved as XML file!');
+            } catch (err) {
+                console.error('Error saving diagram:', err);
+                alert('Error saving diagram. See console for details.');
+            }
+        };
+
+        // My function to export the diagram as an SVG file
+        window.myExportSvg = async () => {
+            try {
+                const { svg } = await myModeler.saveSVG();
+                const myBlob = new Blob([svg], { type: 'image/svg+xml' });
+                const myUrl = URL.createObjectURL(myBlob);
+        
+                const myLink = document.createElement('a');
+                myLink.href = myUrl;
+                myLink.download = 'diagram.svg';
+                myLink.click();
+
+                alert('Diagram exported as SVG!');
+            } catch (err) {
+                console.error('Error exporting SVG:', err);
+                alert('Error exporting SVG. See console for details.');
+            }
+        };
+
+        // My function to load a file and display the diagram
+        window.myLoadFile = async (myEvent) => {
+            const myFile = myEvent.target.files[0];
+            if (!myFile) {
+                return;
+            }
+
+            const myReader = new FileReader();
+            myReader.onload = async (myReaderEvent) => {
+                const myDiagramXML = myReaderEvent.target.result;
+                await myDisplayDiagram(myDiagramXML);
+            };
+            myReader.readAsText(myFile);
+        };
+
+        // My function to start a new blank diagram
+        window.myNewDiagram = async () => {
+            await myDisplayDiagram(myInitialDiagram);
+            alert('New diagram created!');
+        };
+
+        // My function to undo the last action
+        window.myUndo = () => {
+            try {
+                myCommandStack.undo();
+            } catch (err) {
+                console.warn('Cannot undo. Stack is empty.');
+            }
+        };
+
+        // My function to redo the last undone action
+        window.myRedo = () => {
+            try {
+                myCommandStack.redo();
+            } catch (err) {
+                console.warn('Cannot redo. Stack is empty.');
+            }
+        };
+
+        // My function to change the name of the selected element
+        window.myChangeName = (myNewName) => {
+            const mySelection = myModeler.get('selection').get();
+            if (mySelection.length > 0) {
+                const myElement = mySelection[0];
+                myModeling.updateProperties(myElement, { name: myNewName });
+            } else {
+                alert('Please select an element to change its name.');
+            }
+        };
+
+        // Display a new diagram on page load
+        (async () => {
+            await myDisplayDiagram(myInitialDiagram);
+        })();
+    </script>
+</body>
+</html>
