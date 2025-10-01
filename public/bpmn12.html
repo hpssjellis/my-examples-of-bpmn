@@ -310,16 +310,46 @@
             myLoadAndDisplay(myStartupDiagram);
         };
 
+
+
+
         const myLoadAndDisplay = async (myDiagramXML) => {
-            try {
-                await myModeler.importXML(myDiagramXML);
-                myXmlTextarea.value = myDiagramXML;
-                console.log('Diagram loaded successfully.');
-            } catch (err) {
-                console.error('Error loading diagram:', err);
-                alert('Error loading diagram. Make sure it is a valid BPMN XML file.');
-            }
-        };
+    try {
+        // --- Pre-cleaning fixes ---
+        let myCleanXML = myDiagramXML;
+
+        // Remove nested <bpmn:definitions> inside <bpmn:definitions>
+        myCleanXML = myCleanXML.replace(/<bpmn:definitions>[\s\S]*<\/bpmn:definitions>/g, '');
+
+        // Remove invalid <bpmn:schema> wrappers
+        myCleanXML = myCleanXML.replace(/<\/?bpmn:schema[^>]*>/g, '');
+
+        // Remove non-standard seq0/seq1/seq2 attributes
+        myCleanXML = myCleanXML.replace(/\s+seq\d+="[^"]*"/g, '');
+
+        // Ensure namespaces exist on the main <bpmn:definitions>
+        if (!myCleanXML.includes('xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"')) {
+            myCleanXML = myCleanXML.replace(
+                /<bpmn:definitions/,
+                `<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                                   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                                   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                                   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                                   xmlns:model="http://bpmn.io/schema/bpmn-modeler/1.0"
+                                   targetNamespace="http://bpmn.io/schema/bpmn"`
+            );
+        }
+
+        // --- Import into modeler ---
+        await myModeler.importXML(myCleanXML);
+        myXmlTextarea.value = myCleanXML;
+        console.log('Diagram loaded successfully.');
+    } catch (err) {
+        console.error('Error loading diagram:', err);
+        alert('Error loading diagram. Make sure it is a valid BPMN XML file.');
+    }
+};
+
 
         window.mySaveDiagram = async () => {
             try {
