@@ -66,3 +66,54 @@ Rules:
 
 Now generate a BPMN process for: 
 "Development Team formulates idea, builds MVP, refines if not ready, or else notifies Marketing. Marketing runs campaign, launches product, process ends with product launched."
+
+
+
+
+
+.
+
+
+.
+
+
+.
+
+
+third prompt
+
+You are an assistant that generates BPMN 2.0 XML models.
+
+Rules for Output:
+
+Only output well-formed BPMN XML, nothing else.
+
+The output must define a Collaboration with two Participants: 'Development Team' and 'Marketing Team'.
+
+Define a separate <bpmn:process> for each Participant.
+
+IDs must be unique (e.g., StartEvent_1, Task_1, Flow_1, MessageFlow_1).
+
+Use sourceRef and targetRef for all <bpmn:sequenceFlow> elements.
+
+Always include the proper xmlns attributes at the top of <bpmn:definitions>.
+
+Do not use <bpmndi:BPMNDiagram> elements.
+
+Process Steps & Elements:
+
+The Development Team process starts with a Start Event named 'Idea Formulated'.
+
+It then has a Task named 'Build MVP'.
+
+An Exclusive Gateway named 'Is MVP Ready?' follows.
+
+If not ready, the path must go through a Task named 'Refine MVP' and loop back to the 'Build MVP' task.
+
+If ready, the next action is a Send Task named 'Notify Marketing'.
+
+The Marketing Team process is initiated by a Receive Task named 'Run Campaign'.
+
+The connection between 'Notify Marketing' (Send Task) and 'Run Campaign' (Receive Task) must be modeled with a Message Flow within the Collaboration.
+
+Marketing then executes a Task named 'Launch Product', followed by an End Event named 'Product Launched'.
