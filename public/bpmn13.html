@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Simple BPMN Editor</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #myHeader {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-size: 24px;
+        }
+
+        #myContainer {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        #myCanvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        #myControls {
+            background-color: #333;
+            padding: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .myButton {
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        
+        .myButton:hover {
+            opacity: 0.8;
+        }
+
+        #myXmlTextarea {
+            width: 90%;
+            height: 200px;
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            resize: vertical;
+        }
+
+        .myControlGroup {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            padding: 5px;
+            background-color: #444;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="myHeader">My Simple BPMN Editor</div>
+    <div id="myContainer">
+        <div id="myCanvas"></div>
+    </div>
+    <div id="myControls">
+        <button class="myButton" style="background-color: #008CBA;" onclick="myNewDiagram()">New</button>
+        <button class="myButton" style="background-color: #4CAF50;" onclick="mySaveDiagram()">Save XML</button>
+        <button class="myButton" style="background-color: #4CAF50;" onclick="myExportSvg()">Export SVG</button>
+        <button class="myButton" style="background-color: #f44336;" onclick="document.getElementById('myFileInput').click()">Load XML</button>
+        <button class="myButton" style="background-color: #555;" onclick="myUndo()">Undo</button>
+        <button class="myButton" style="background-color: #555;" onclick="myRedo()">Redo</button>
+        <input type="text" id="myNameInput" placeholder="Enter new name" style="padding: 10px; border-radius: 5px; border: none;" />
+        <button class="myButton" style="background-color: #2196F3;" onclick="myChangeName(document.getElementById('myNameInput').value)">Change Name</button>
+        <div class="myControlGroup">
+            <button class="myButton" style="background-color: #FFA500;" onclick="myLoadXmlFromTextarea()">Load from Textarea</button>
+            <button class="myButton" style="background-color: #FFA500;" onclick="myExportXmlToTextarea()">Export to Textarea</button>
+            <textarea id="myXmlTextarea" placeholder="Paste your BPMN XML here..."></textarea>
+        </div>
+    </div>
+
+    <!-- This hidden input is used to open the file selection dialog -->
+    <input type="file" id="myFileInput" style="display: none;" onchange="myLoadFile(event)">
+
+    <script src="https://unpkg.com/bpmn-js@18.0.0/dist/bpmn-modeler.development.js"></script>
+    <script>
+        let myModeler;
+        let myCommandStack;
+        let myModeling;
+        let myXmlTextarea;
+        const myStartupDiagram = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:model="http://bpmn.io/schema/bpmn-modeler/1.0" id="Definitions_11" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_12" name="Product Launch">
+    <bpmn:participant id="Participant_13" name="Development Team" processRef="Process_14" />
+    <bpmn:participant id="Participant_15" name="Marketing Team" processRef="Process_16" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_14" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_0o9e85n">
+      <bpmn:lane id="Lane_1j7u93f" name="Development Team">
+        <bpmn:flowNodeRef>StartEvent_0p8y817</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_1g6g4c0</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_1k7t4q6</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_1g6g4c1</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="StartEvent_0p8y817" name="Idea Formulation" />
+    <bpmn:task id="Task_1g6g4c0" name="Build MVP" />
+    <bpmn:exclusiveGateway id="Gateway_1k7t4q6" name="Is MVP Ready?" />
+    <bpmn:task id="Task_1g6g4c1" name="Refine MVP" />
+    <bpmn:sequenceFlow id="Flow_1g4q97p" sourceRef="StartEvent_0p8y817" targetRef="Task_1g6g4c0" />
+    <bpmn:sequenceFlow id="Flow_1j9j8g8" sourceRef="Task_1g6g4c0" targetRef="Gateway_1k7t4q6" />
+    <bpmn:sequenceFlow id="Flow_0j1q3y6" name="No" sourceRef="Gateway_1k7t4q6" targetRef="Task_1g6g4c1" />
+    <bpmn:textAnnotation id="TextAnnotation_0905w8d">
+      <bpmn:text>Focus on core features only.</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_1c2d3e4" sourceRef="Task_1g6g4c0" targetRef="TextAnnotation_0905w8d" />
+  </bpmn:process>
+  <bpmn:process id="Process_16" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_0m8o64f">
+      <bpmn:lane id="Lane_1g1r0d2" name="Marketing Team">
+        <bpmn:flowNodeRef>Task_1x8h8j4</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_1a1g1g1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Event_1o1j3n1</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:task id="Task_1x8h8j4" name="Create Launch Campaign" />
+    <bpmn:task id="Task_1a1g1g1" name="Launch Product" />
+    <bpmn:endEvent id="Event_1o1j3n1" name="Product Launched" />
+    <bpmn:sequenceFlow id="Flow_1c2p2z2" sourceRef="Task_1x8h8j4" targetRef="Task_1a1g1g1" />
+    <bpmn:sequenceFlow id="Flow_1s1c1s1" sourceRef="Task_1a1g1g1" targetRef="Event_1o1j3n1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_12">
+      <bpmndi:BPMNShape id="Participant_13_di" bpmnElement="Participant_13" isHorizontal="true">
+        <dc:Bounds x="150" y="80" width="850" height="250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_1j7u93f_di" bpmnElement="Lane_1j7u93f" isHorizontal="true">
+        <dc:Bounds x="180" y="80" width="820" height="250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="StartEvent_0p8y817_di" bpmnElement="StartEvent_0p8y817">
+        <dc:Bounds x="232" y="192" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="210" y="235" width="80" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_1g6g4c0_di" bpmnElement="Task_1g6g4c0">
+        <dc:Bounds x="320" y="170" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1k7t4q6_di" bpmnElement="Gateway_1k7t4q6" isMarkerVisible="true">
+        <dc:Bounds x="475" y="185" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="463" y="163" width="75" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_1g6g4c1_di" bpmnElement="Task_1g6g4c1">
+        <dc:Bounds x="590" y="170" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ParallelGateway_0d6v3d7_di" bpmnElement="ParallelGateway_0d6v3d7">
+        <dc:Bounds x="585" y="435" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_0l9a8t5_di" bpmnElement="Task_0l9a8t5">
+        <dc:Bounds x="680" y="410" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ParallelGateway_0g7f3v3_di" bpmnElement="ParallelGateway_0g7f3v3">
+        <dc:Bounds x="835" y="435" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_1t9u2s3_di" bpmnElement="Task_1t9u2s3">
+        <dc:Bounds x="680" y="500" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1g4q97p_di" bpmnElement="Flow_1g4q97p">
+        <di:waypoint x="268" y="210" />
+        <di:waypoint x="320" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1j9j8g8_di" bpmnElement="Flow_1j9j8g8">
+        <di:waypoint x="420" y="210" />
+        <di:waypoint x="475" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0j1q3y6_di" bpmnElement="Flow_0j1q3y6">
+        <di:waypoint x="525" y="210" />
+        <di:waypoint x="590" y="210" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="550" y="192" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Participant_15_di" bpmnElement="Participant_15" isHorizontal="true">
+        <dc:Bounds x="150" y="340" width="850" height="250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_1g1r0d2_di" bpmnElement="Lane_1g1r0d2" isHorizontal="true">
+        <dc:Bounds x="180" y="340" width="820" height="250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_1x8h8j4_di" bpmnElement="Task_1x8h8j4">
+        <dc:Bounds x="320" y="420" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_1a1g1g1_di" bpmnElement="Task_1a1g1g1">
+        <dc:Bounds x="920" y="420" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1o1j3n1_di" bpmnElement="Event_1o1j3n1">
+        <dc:Bounds x="1062" y="442" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1041" y="485" width="80" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1c2p2z2_di" bpmnElement="Flow_1c2p2z2">
+        <di:waypoint x="420" y="460" />
+        <di:waypoint x="450" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1s1c1s1_di" bpmnElement="Flow_1s1c1s1">
+        <di:waypoint x="1020" y="460" />
+        <di:waypoint x="1062" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0j2t5b1" bpmnElement="Flow_0j2t5b1">
+        <di:waypoint x="500" y="235" />
+        <di:waypoint x="500" y="340" />
+        <di:waypoint x="370" y="340" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1j1o3j3" name="Yes" bpmnElement="Flow_1j1o3j3">
+        <di:waypoint x="500" y="235" />
+        <di:waypoint x="500" y="340" />
+        <di:waypoint x="500" y="435" />
+        <di:waypoint x="585" y="460" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="509" y="278" width="20" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1k2q2w2" bpmnElement="Flow_1k2q2w2">
+        <di:waypoint x="640" y="250" />
+        <di:waypoint x="640" y="420" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1o1n1o1" bpmnElement="Flow_1o1n1o1">
+        <di:waypoint x="690" y="210" />
+        <di:waypoint x="750" y="210" />
+        <di:waypoint x="750" y="460" />
+        <di:waypoint x="592" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="TextAnnotation_0905w8d_di" bpmnElement="TextAnnotation_0905w8d">
+        <dc:Bounds x="300" y="100" width="100" height="30" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Association_1c2d3e4_di" bpmnElement="Association_1c2d3e4">
+        <di:waypoint x="370" y="170" />
+        <di:waypoint x="370" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1t1r8f9_di" bpmnElement="Flow_1t1r8f9">
+        <di:waypoint x="635" y="460" />
+        <di:waypoint x="680" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1e3j7k8_di" bpmnElement="Flow_1e3j7k8">
+        <di:waypoint x="635" y="460" />
+        <di:waypoint x="680" y="460" />
+        <di:waypoint x="680" y="540" />
+        <di:waypoint x="730" y="540" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1l0t6h2_di" bpmnElement="Flow_1l0t6h2">
+        <di:waypoint x="780" y="450" />
+        <di:waypoint x="835" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1r2e4t3_di" bpmnElement="Flow_1r2e4t3">
+        <di:waypoint x="780" y="540" />
+        <di:waypoint x="835" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1q4z2w1_di" bpmnElement="Flow_1q4z2w1">
+        <di:waypoint x="885" y="460" />
+        <di:waypoint x="920" y="460" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+
+        const myBlankDiagram = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1" isExecutable="false" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1" />
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+
+        const myInit = () => {
+            const myCanvas = document.getElementById('myCanvas');
+            myModeler = new BpmnJS({ container: myCanvas });
+            myCommandStack = myModeler.get('commandStack');
+            myModeling = myModeler.get('modeling');
+            myXmlTextarea = document.getElementById('myXmlTextarea');
+
+            myLoadAndDisplay(myStartupDiagram);
+        };
+
+<script>
+    const myLoadAndDisplay = async (myDiagramXML) => {
+        try {
+            // First try to import directly
+            await myModeler.importXML(myDiagramXML);
+            myXmlTextarea.value = myDiagramXML;
+            console.log('Diagram loaded successfully.');
+        } catch (err) {
+            console.warn('Initial import failed, trying to repair XML...', err);
+
+            try {
+                // Parse into DOM and attempt repairs
+                const myParser = new DOMParser();
+                const myDoc = myParser.parseFromString(myDiagramXML, "application/xml");
+
+                // Check for parser errors
+                const myErrors = myDoc.getElementsByTagName("parsererror");
+                if (myErrors.length > 0) {
+                    console.error("XML parser error:", myErrors[0].textContent);
+                    alert("The BPMN XML file is not well-formed and could not be fixed.");
+                    return;
+                }
+
+                // Ensure <bpmn:definitions> has required namespaces
+                let myDefs = myDoc.getElementsByTagName("bpmn:definitions")[0];
+                if (myDefs) {
+                    if (!myDefs.getAttribute("xmlns:bpmn")) {
+                        myDefs.setAttribute("xmlns:bpmn", "http://www.omg.org/spec/BPMN/20100524/MODEL");
+                    }
+                    if (!myDefs.getAttribute("xmlns:bpmndi")) {
+                        myDefs.setAttribute("xmlns:bpmndi", "http://www.omg.org/spec/BPMN/20100524/DI");
+                    }
+                    if (!myDefs.getAttribute("xmlns:dc")) {
+                        myDefs.setAttribute("xmlns:dc", "http://www.omg.org/spec/DD/20100524/DC");
+                    }
+                    if (!myDefs.getAttribute("xmlns:di")) {
+                        myDefs.setAttribute("xmlns:di", "http://www.omg.org/spec/DD/20100524/DI");
+                    }
+                }
+
+                // Serialize back to string
+                const mySerializer = new XMLSerializer();
+                const myFixedXML = mySerializer.serializeToString(myDoc);
+
+                // Try importing again with fixed XML
+                await myModeler.importXML(myFixedXML);
+                myXmlTextarea.value = myFixedXML;
+                console.log('Diagram loaded successfully after fixing minor XML issues.');
+            } catch (repairErr) {
+                console.error('Error repairing and loading diagram:', repairErr);
+                alert('Error loading diagram. The XML file could not be fixed.');
+            }
+        }
+    };
+</script>
+
+
+
+        window.mySaveDiagram = async () => {
+            try {
+                const { xml } = await myModeler.saveXML({ format: true });
+                const myBlob = new Blob([xml], { type: 'text/xml' });
+                const myUrl = URL.createObjectURL(myBlob);
+                
+                const myLink = document.createElement('a');
+                myLink.href = myUrl;
+                myLink.download = 'diagram.bpmn';
+                myLink.click();
+
+                alert('Diagram saved as XML file!');
+            } catch (err) {
+                console.error('Error saving diagram:', err);
+                alert('Error saving diagram. See console for details.');
+            }
+        };
+
+        window.myExportSvg = async () => {
+            try {
+                const { svg } = await myModeler.saveSVG();
+                const myBlob = new Blob([svg], { type: 'image/svg+xml' });
+                const myUrl = URL.createObjectURL(myBlob);
+        
+                const myLink = document.createElement('a');
+                myLink.href = myUrl;
+                myLink.download = 'diagram.svg';
+                myLink.click();
+
+                alert('Diagram exported as SVG!');
+            } catch (err) {
+                console.error('Error exporting SVG:', err);
+                alert('Error exporting SVG. See console for details.');
+            }
+        };
+
+        window.myLoadFile = async (myEvent) => {
+            const myFile = myEvent.target.files[0];
+            if (!myFile) {
+                return;
+            }
+
+            const myReader = new FileReader();
+            myReader.onload = async (myReaderEvent) => {
+                const myDiagramXML = myReaderEvent.target.result;
+                await myLoadAndDisplay(myDiagramXML);
+            };
+            myReader.readAsText(myFile);
+        };
+
+        window.myLoadXmlFromTextarea = async () => {
+            const myDiagramXML = myXmlTextarea.value;
+            await myLoadAndDisplay(myDiagramXML);
+        };
+        
+        window.myExportXmlToTextarea = async () => {
+            try {
+                const { xml } = await myModeler.saveXML({ format: true });
+                myXmlTextarea.value = xml;
+                alert('Diagram XML exported to the textarea!');
+            } catch (err) {
+                console.error('Error exporting XML to textarea:', err);
+                alert('Error exporting XML to textarea. See console for details.');
+            }
+        };
+
+        window.myNewDiagram = async () => {
+            await myLoadAndDisplay(myBlankDiagram);
+            alert('New diagram created!');
+        };
+
+        window.myUndo = () => {
+            try {
+                myCommandStack.undo();
+            } catch (err) {
+                console.warn('Cannot undo. Stack is empty.');
+            }
+        };
+
+        window.myRedo = () => {
+            try {
+                myCommandStack.redo();
+            } catch (err) {
+                console.warn('Cannot redo. Stack is empty.');
+            }
+        };
+
+        window.myChangeName = (myNewName) => {
+            const mySelection = myModeler.get('selection').get();
+            if (mySelection.length > 0) {
+                const myElement = mySelection[0];
+                myModeling.updateProperties(myElement, { name: myNewName });
+            } else {
+                alert('Please select an element to change its name.');
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', myInit);
+    </script>
+</body>
+</html>
