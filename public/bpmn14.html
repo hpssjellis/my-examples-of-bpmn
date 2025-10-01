@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Simple BPMN Editor</title>
+</head>
+<body style="font-family: sans-serif; margin:0; padding:0; background:#f0f0f0; display:flex; flex-direction:column; height:100vh;">
+
+  <div id="myHeader" style="background:#4CAF50; color:white; padding:10px; text-align:center; font-size:24px;">My Simple BPMN Editor</div>
+  
+  <div id="myContainer" style="flex-grow:1; position:relative;">
+    <div id="myCanvas" style="width:100%; height:100%;"></div>
+  </div>
+
+  <div id="myControls" style="background:#333; padding:10px; display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:10px;">
+    <input type="button" value="New" onclick="myNewDiagram()" style="background:#008CBA; color:white; padding:10px; border:none; border-radius:5px;">
+    <input type="button" value="Save XML" onclick="mySaveDiagram()" style="background:#4CAF50; color:white; padding:10px; border:none; border-radius:5px;">
+    <input type="button" value="Export SVG" onclick="myExportSvg()" style="background:#4CAF50; color:white; padding:10px; border:none; border-radius:5px;">
+    <input type="button" value="Load XML" onclick="document.getElementById('myFileInput').click()" style="background:#f44336; color:white; padding:10px; border:none; border-radius:5px;">
+    <input type="button" value="Undo" onclick="myUndo()" style="background:#555; color:white; padding:10px; border:none; border-radius:5px;">
+    <input type="button" value="Redo" onclick="myRedo()" style="background:#555; color:white; padding:10px; border:none; border-radius:5px;">
+    <input type="text" id="myNameInput" placeholder="Enter new name" style="padding:10px; border-radius:5px; border:none;">
+    <input type="button" value="Change Name" onclick="myChangeName(document.getElementById('myNameInput').value)" style="background:#2196F3; color:white; padding:10px; border:none; border-radius:5px;">
+    
+    <div style="display:flex; flex-direction:column; align-items:center; gap:5px; padding:5px; background:#444; border-radius:5px;">
+      <input type="button" value="Load from Textarea" onclick="myLoadXmlFromTextarea()" style="background:#FFA500; color:white; padding:10px; border:none; border-radius:5px;">
+      <input type="button" value="Export to Textarea" onclick="myExportXmlToTextarea()" style="background:#FFA500; color:white; padding:10px; border:none; border-radius:5px;">
+      <input type="button" value="XML → JSON" onclick="myXmlToJson()" style="background:#9C27B0; color:white; padding:10px; border:none; border-radius:5px;">
+      <input type="button" value="JSON → XML" onclick="myJsonToXml()" style="background:#673AB7; color:white; padding:10px; border:none; border-radius:5px;">
+      <textarea id="myXmlTextarea" placeholder="Paste your BPMN XML or JSON here..." style="width:90%; height:200px; margin-top:10px; padding:10px; border:1px solid #ccc; border-radius:5px; resize:vertical;"></textarea>
+    </div>
+  </div>
+
+  <input type="file" id="myFileInput" style="display:none;" onchange="myLoadFile(event)">
+
+  <script src="https://unpkg.com/bpmn-js@18.0.0/dist/bpmn-modeler.development.js"></script>
+  <script>
+    let myModeler;
+    let myCommandStack;
+    let myModeling;
+    let myXmlTextarea;
+
+    // XML ↔ JSON conversion helpers
+    function myXmlToJson() {
+      try {
+        const myParser = new DOMParser();
+        const myDoc = myParser.parseFromString(myXmlTextarea.value, "application/xml");
+        const myErrors = myDoc.getElementsByTagName("parsererror");
+        if (myErrors.length > 0) {
+          alert("Invalid XML. Cannot convert.");
+          return;
+        }
+        function nodeToObj(node) {
+          let obj = {};
+          if (node.nodeType === 1) { // element
+            if (node.attributes.length > 0) {
+              obj["@attributes"] = {};
+              for (let j=0; j<node.attributes.length; j++) {
+                const attr = node.attributes.item(j);
+                obj["@attributes"][attr.nodeName] = attr.nodeValue;
+              }
+            }
+          } else if (node.nodeType === 3) { // text
+            return node.nodeValue.trim();
+          }
+          if (node.hasChildNodes()) {
+            for (let i=0; i<node.childNodes.length; i++) {
+              const child = node.childNodes.item(i);
+              const nodeName = child.nodeName;
+              const childObj = nodeToObj(child);
+              if (childObj !== "" && childObj !== null) {
+                if (!obj[nodeName]) {
+                  obj[nodeName] = childObj;
+                } else {
+                  if (!Array.isArray(obj[nodeName])) {
+                    obj[nodeName] = [obj[nodeName]];
+                  }
+                  obj[nodeName].push(childObj);
+                }
+              }
+            }
+          }
+          return obj;
+        }
+        const jsonObj = nodeToObj(myDoc.documentElement);
+        myXmlTextarea.value = JSON.stringify(jsonObj, null, 2);
+      } catch (e) {
+        console.error("Error converting XML to JSON:", e);
+        alert("Conversion failed.");
+      }
+    }
+
+    function myJsonToXml() {
+      try {
+        const jsonObj = JSON.parse(myXmlTextarea.value);
+        function objToNode(obj, nodeName) {
+          let nodeStr = "";
+          if (typeof obj === "string") {
+            nodeStr += obj;
+          } else {
+            let attrs = "";
+            if (obj["@attributes"]) {
+              for (const [k, v] of Object.entries(obj["@attributes"])) {
+                attrs += ` ${k}="${v}"`;
+              }
+            }
+            nodeStr += `<${nodeName}${attrs}>`;
+            for (const [key, val] of Object.entries(obj)) {
+              if (key === "@attributes") continue;
+              if (Array.isArray(val)) {
+                val.forEach(v => { nodeStr += objToNode(v, key); });
+              } else {
+                nodeStr += objToNode(val, key);
+              }
+            }
+            nodeStr += `</${nodeName}>`;
+          }
+          return nodeStr;
+        }
+        const rootName = Object.keys(jsonObj)[0];
+        const xmlStr = objToNode(jsonObj[rootName], rootName);
+        myXmlTextarea.value = `<?xml version="1.0" encoding="UTF-8"?>\n${xmlStr}`;
+      } catch (e) {
+        console.error("Error converting JSON to XML:", e);
+        alert("Conversion failed.");
+      }
+    }
+
+    // --- existing BPMN init/load/save functions (unchanged) ---
+    const myStartupDiagram = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_11" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1" isExecutable="false"/>
+</bpmn:definitions>`;
+
+    const myBlankDiagram = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1" isExecutable="false"/>
+</bpmn:definitions>`;
+
+    const myInit = () => {
+      myModeler = new BpmnJS({ container: document.getElementById('myCanvas') });
+      myCommandStack = myModeler.get('commandStack');
+      myModeling = myModeler.get('modeling');
+      myXmlTextarea = document.getElementById('myXmlTextarea');
+      myLoadAndDisplay(myStartupDiagram);
+    };
+
+    const myLoadAndDisplay = async (myDiagramXML) => {
+      try {
+        await myModeler.importXML(myDiagramXML);
+        myXmlTextarea.value = myDiagramXML;
+      } catch (err) {
+        console.warn("Import failed", err);
+      }
+    };
+
+    window.mySaveDiagram = async () => {
+      const { xml } = await myModeler.saveXML({ format: true });
+      myXmlTextarea.value = xml;
+    };
+    window.myExportSvg = async () => {
+      const { svg } = await myModeler.saveSVG();
+      const myBlob = new Blob([svg], { type: 'image/svg+xml' });
+      const myUrl = URL.createObjectURL(myBlob);
+      const myLink = document.createElement('a');
+      myLink.href = myUrl;
+      myLink.download = 'diagram.svg';
+      myLink.click();
+    };
+    window.myLoadFile = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (evt) => { await myLoadAndDisplay(evt.target.result); };
+      reader.readAsText(file);
+    };
+    window.myLoadXmlFromTextarea = async () => { await myLoadAndDisplay(myXmlTextarea.value); };
+    window.myExportXmlToTextarea = async () => { const { xml } = await myModeler.saveXML({ format: true }); myXmlTextarea.value = xml; };
+    window.myNewDiagram = async () => { await myLoadAndDisplay(myBlankDiagram); };
+    window.myUndo = () => { try { myCommandStack.undo(); } catch {} };
+    window.myRedo = () => { try { myCommandStack.redo(); } catch {} };
+    window.myChangeName = (name) => {
+      const sel = myModeler.get('selection').get();
+      if (sel.length > 0) { myModeling.updateProperties(sel[0], { name }); }
+    };
+
+    document.addEventListener('DOMContentLoaded', myInit);
+  </script>
+</body>
+</html>
