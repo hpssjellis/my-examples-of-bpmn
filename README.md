@@ -2,4 +2,4 @@
 BPMN  Business process modal notation examples
 
 
-https://hpssjellis.github.io/my-examples-of-bpmn-/public/
+https://hpssjellis.github.io/my-examples-of-bpmn/public/
