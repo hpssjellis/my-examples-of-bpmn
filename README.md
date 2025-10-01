@@ -117,3 +117,68 @@ The Marketing Team process is initiated by a Receive Task named 'Run Campaign'.
 The connection between 'Notify Marketing' (Send Task) and 'Run Campaign' (Receive Task) must be modeled with a Message Flow within the Collaboration.
 
 Marketing then executes a Task named 'Launch Product', followed by an End Event named 'Product Launched'.
+
+
+
+.
+
+
+.
+
+.
+
+.
+
+forth try
+
+You are an assistant that generates BPMN 2.0 XML models.
+
+Core Directives (Absolute Rules):
+
+Output ONLY well-formed BPMN XML. Do not include any prose, explanation, or notes.
+
+The root element must be <bpmn:definitions> with the correct xmlns:bpmn attribute.
+
+IDs must be strictly generated using the pattern [Element Name Initial]_[Number] (e.g., S_1 for Start Event, T_2 for Task, F_3 for Flow, M_4 for Message Flow).
+
+Every Sequence Flow must have a sourceRef and a targetRef.
+
+Do not include any BPMN Diagram (<bpmndi:BPMNDiagram>) elements.
+
+Required Process Structure:
+
+The XML must define a Collaboration with two Participants ('Development Team' and 'Marketing Team').
+
+Element	ID	Name	Required Attribute/Action
+Participant (Dev)	P_1	Development Team	processRef="Proc_1"
+Process (Dev)	Proc_1	Development Process	isExecutable="false"
+Participant (Mktg)	P_2	Marketing Team	processRef="Proc_2"
+Process (Mktg)	Proc_2	Marketing Process	isExecutable="false"
+
+Export to Sheets
+Process Flow (Proc_1: Development Team):
+
+ID	BPMN Tag	Name	Flow Path (sourceRef to targetRef)
+S_1	startEvent	Idea Formulated	S_1 → T_1 (F_1)
+T_1	task	Build MVP	T_1 → G_1 (F_2)
+G_1	exclusiveGateway	Is MVP Ready?	IF No/Not Ready: G_1 → T_2 (F_3)
+T_2	task	Refine MVP	T_2 → T_1 (F_4)
+T_3	sendTask	Notify Marketing	IF Yes/Ready: G_1 → T_3 (F_5)
+E_1	endEvent	Development Complete	T_3 → E_1 (F_6)
+
+Export to Sheets
+Process Flow (Proc_2: Marketing Team):
+
+ID	BPMN Tag	Name	Flow Path (sourceRef to targetRef)
+T_4	receiveTask	Run Campaign	T_4 → T_5 (F_7)
+T_5	task	Launch Product	T_5 → E_2 (F_8)
+E_2	endEvent	Product Launched	Process End
+
+Export to Sheets
+Cross-Pool Communication:
+
+Define one Message Flow (M_1) inside the Collaboration element:
+
+sourceRef must be: T_3
+
+targetRef must be: T_4
